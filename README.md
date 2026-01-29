@@ -1,28 +1,22 @@
-# Viiibe - Open Source Peloton Companion App
+# Viiibe - Peloton Companion App
 
-A free, open-source fitness companion app for Peloton bikes. Track your rides, play bike-controlled arcade games, and mint workout achievements as NFTs - all without a subscription.
+A free, open-source fitness gaming app for Peloton bikes. Play bike-controlled arcade games, compete in global multiplayer matches, and track your workouts.
+
+## Download
+
+**[Download Latest Release (v1.0.0-beta)](https://github.com/viiibez/viiibe-android/releases/latest)**
 
 ## Features
 
-### Real-time Metrics Tracking
-- Cadence (RPM)
-- Resistance level
-- Power output (watts)
-- Speed (mph/km/h)
-- Heart rate (with compatible monitor)
-- Total output (kJ)
-- Calories burned
-- Distance
-
-### Bike Arcade
-6 games controlled entirely by pedaling - no touch input during gameplay!
+### Bike Arcade Games
+8 games controlled entirely by pedaling - no touch input during gameplay!
 
 | Input | Action |
 |-------|--------|
 | Cadence (RPM) | Speed / Movement |
-| Power Burst | Boost / Special |
-| Resistance +10 | Jump / Action 1 |
-| Resistance -10 | Slide / Action 2 |
+| Power Output | Boost / Special |
+| Resistance +8 | Jump / Action 1 |
+| Resistance -8 | Slide / Action 2 |
 
 **Games:**
 - **Sprint Race** - Race against AI opponents
@@ -31,186 +25,161 @@ A free, open-source fitness companion app for Peloton bikes. Track your rides, p
 - **Zombie Escape** - Outrun the zombie horde
 - **Hill Climb** - Conquer mountain terrain
 - **Power Surge** - Charge and blast targets
+- **Music Speed** - Race to the beat
+- **Paper Route** - Deliver newspapers by pedaling
 
-### Avalanche Wallet
-- Generate or import your wallet
-- Send and receive AVAX
-- PIN protection with auto-lock
-- Mint workout achievements as on-chain NFTs
-- QR code for easy receiving
+### Global Multiplayer
+- Real-time matches against players worldwide
+- Server-relayed gameplay for fair competition
+- Spectate live matches on [viiibe.xyz](https://viiibe.xyz)
 
-> Your private keys are encrypted and stored locally. They are never transmitted externally.
+### Real-time Metrics
+- Cadence (RPM)
+- Power output (watts)
+- Resistance level
+- Calories burned
+- Total output (kJ)
 
-### Workout History
-- Complete ride history stored locally
-- Detailed per-ride statistics
-- Progress tracking over time
-
-### Video Workouts
-- Browse and play free cycling workout videos
-- Categories: HIIT, Endurance, Climb, Intervals, Scenic
-- Multiple difficulty levels
+### Web3 Wallet
+- Built-in Avalanche wallet
+- Link your X (Twitter) account
+- Track stats on the web dashboard
 
 ## Installation on Peloton
 
 ### Prerequisites
 - Peloton Bike (original or Bike+)
 - Computer with ADB installed
-- USB cable or WiFi connection
+- WiFi connection (both devices on same network)
 
-### Step 1: Enable Developer Mode
+### Step 1: Enable Developer Mode on Peloton
 
 1. On your Peloton, go to **Settings** > **Device Settings**
 2. Tap **About tablet**
-3. Tap **Build number** 7 times to enable Developer Options
+3. Tap **Build number** 7 times until you see "You are now a developer!"
 4. Go back to **Device Settings** > **Developer options**
-5. Enable **USB debugging** or **Wireless debugging**
+5. Enable **Wireless debugging**
+6. Tap **Wireless debugging** to see the IP address and port
 
-### Step 2: Connect via ADB
+### Step 2: Install ADB on Your Computer
 
-**USB Connection:**
+**macOS (Homebrew):**
 ```bash
-# Connect USB cable from computer to Peloton
-adb devices
-# You should see your Peloton listed
+brew install android-platform-tools
 ```
 
-**WiFi Connection:**
+**Windows:**
+Download from [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) and add to PATH.
+
+**Linux:**
 ```bash
-# On Peloton: Developer options > Wireless debugging > Pair device
+sudo apt install adb
+```
+
+### Step 3: Connect to Peloton via WiFi
+
+```bash
+# Pair with Peloton (first time only)
+# On Peloton: Developer options > Wireless debugging > Pair device with pairing code
 adb pair <IP>:<PAIRING_PORT>
-# Enter pairing code
+# Enter the pairing code shown on Peloton
 
+# Connect to Peloton
 adb connect <IP>:<PORT>
+# Example: adb connect 192.168.1.100:5555
+
+# Verify connection
+adb devices
+# Should show your Peloton as "device"
 ```
 
-### Step 3: Install the App
+### Step 4: Download and Install the App
 
-**From Release APK:**
 ```bash
-adb install viiibe-release.apk
+# Download the latest APK
+curl -LO https://github.com/viiibez/viiibe-android/releases/latest/download/viiibe-v1.0.0-beta.apk
+
+# Verify the download (optional but recommended)
+shasum -a 256 viiibe-v1.0.0-beta.apk
+# Compare with SHA256 hash on release page
+
+# Install on Peloton
+adb install viiibe-v1.0.0-beta.apk
 ```
 
-**Build from Source:**
-```bash
-git clone https://github.com/avaxjesus/viiibe.git
-cd viiibe
-./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
-```
+### Step 5: Launch the App
 
-### Step 4: Launch
-
-1. Swipe up from the bottom to access the app drawer
-2. Tap **FreeSpin** to launch
+1. On Peloton, swipe up from the bottom to access the app drawer
+2. Tap **Viiibe** to launch
 3. The app will auto-connect to your bike's Bluetooth sensors
+4. Start pedaling and enjoy!
+
+## Verify APK Integrity
+
+Each release includes a SHA256 hash file. Verify your download:
+
+```bash
+# macOS/Linux
+shasum -a 256 viiibe-v1.0.0-beta.apk
+
+# Windows PowerShell
+Get-FileHash viiibe-v1.0.0-beta.apk -Algorithm SHA256
+```
+
+Compare the output with the hash on the [releases page](https://github.com/viiibez/viiibe-android/releases).
 
 ## Building from Source
 
 ### Requirements
-- **JDK 17** (not newer)
-- **Android SDK** with API 34
-- **Gradle 8.x**
+- JDK 17
+- Android SDK with API 34
+- Gradle 8.x
 
-### Commands
+### Build Commands
+
 ```bash
-# Debug build
+# Clone the repository
+git clone https://github.com/viiibez/viiibe-android.git
+cd viiibe-android
+
+# Create local.properties with your SDK path
+echo "sdk.dir=/path/to/your/Android/sdk" > local.properties
+
+# Build debug APK
 ./gradlew assembleDebug
 
-# Release build
-./gradlew assembleRelease
-
-# Run tests
-./gradlew test
+# Install on connected device
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
-
-### Project Structure
-```
-app/src/main/java/com/freespin/app/
-├── arcade/              # Bike-controlled games
-│   ├── data/            # Game models and state
-│   ├── engine/          # Game engine, AI, input processing
-│   └── ui/              # Game screens and renderers
-├── blockchain/          # Avalanche wallet integration
-├── bluetooth/           # Peloton sensor communication
-├── data/                # Database and models
-├── ui/                  # Main app screens
-└── overlay/             # Floating metrics overlay
-```
-
-## Contributing
-
-Contributions are welcome! Here's how to get started:
-
-### Getting Started
-
-1. **Fork the repository** on GitHub
-
-2. **Clone your fork:**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/viiibe.git
-   cd viiibe
-   ```
-
-3. **Create a feature branch:**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-4. **Make your changes** and test on a Peloton or Android emulator
-
-5. **Commit your changes:**
-   ```bash
-   git add .
-   git commit -m "Add your feature description"
-   ```
-
-6. **Push to your fork:**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-7. **Open a Pull Request** on GitHub
-
-### Code Guidelines
-
-- **Kotlin** for all new code
-- **Jetpack Compose** for UI components
-- Follow existing code style and patterns
-- Add comments for complex logic
-- Test on actual Peloton hardware when possible
-
-### Ideas for Contribution
-
-- **New Arcade Games** - Add more bike-controlled games
-- **Workout Programs** - Structured training plans
-- **Social Features** - Leaderboards, challenges
-- **Hardware Support** - Other bike brands
-- **Localization** - Translations
-- **Bug Fixes** - Check the Issues tab
-
-### Reporting Issues
-
-1. Check if the issue already exists
-2. Include your Peloton model and app version
-3. Describe steps to reproduce
-4. Include error messages or screenshots
 
 ## Troubleshooting
 
-### Bike not connecting
-- Ensure Bluetooth is enabled
-- Make sure no other app is connected to the bike
-- Try restarting the bike
+### "adb: command not found"
+Make sure ADB is installed and in your PATH.
+
+### Peloton not showing in `adb devices`
+1. Check both devices are on the same WiFi network
+2. Verify wireless debugging is enabled
+3. Try pairing again with `adb pair`
+
+### Bike sensors not connecting
+1. Ensure Bluetooth is enabled on Peloton
+2. Close any other apps that might be using Bluetooth
+3. Try restarting the Peloton
 
 ### Metrics showing zero
-- Pedal the bike to generate data
-- Check Bluetooth connection is established
+- Start pedaling! Sensors only report when the bike is in motion
+- Check the Bluetooth connection indicator in the app
 
 ### App crashes on launch
-- Check that all permissions are granted
-- Clear app data and try again
-- Reinstall the APK
+1. Uninstall and reinstall: `adb uninstall com.viiibe.app && adb install viiibe-v1.0.0-beta.apk`
+2. Make sure you're using the latest release
+
+## Links
+
+- **Website:** [viiibe.xyz](https://viiibe.xyz)
+- **Releases:** [GitHub Releases](https://github.com/viiibez/viiibe-android/releases)
+- **Issues:** [Report a Bug](https://github.com/viiibez/viiibe-android/issues)
 
 ## Legal Disclaimer
 
@@ -218,11 +187,11 @@ This app is not affiliated with, endorsed by, or connected to Peloton Interactiv
 
 This app only accesses standard Bluetooth fitness protocols that the bike publicly broadcasts. It does not bypass any security measures or access proprietary systems.
 
-Use at your own risk. The developers are not responsible for any damage to your equipment.
+Use at your own risk.
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
