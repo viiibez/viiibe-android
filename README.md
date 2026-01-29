@@ -42,8 +42,7 @@ A free, open-source fitness gaming app for Peloton bikes. Play bike-controlled a
 
 ### Web3 Wallet
 - Built-in Avalanche wallet
-- Link your X (Twitter) account
-- Track stats on the web dashboard
+- Track your stats on [viiibe.xyz](https://viiibe.xyz)
 
 ## Installation on Peloton
 
