@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Viiibe brand colors - vibrant purple/cyan gaming aesthetic -->
+    <color name="primary">#7C4DFF</color>
+    <color name="primary_dark">#651FFF</color>
+    <color name="accent">#00E5FF</color>
+    <color name="secondary">#FF4081</color>
+    <color name="background_dark">#0A0E14</color>
+    <color name="surface_dark">#141B24</color>
+    <color name="on_surface">#FFFFFF</color>
+    <color name="viiibe_gold">#FFD700</color>
+    <color name="viiibe_success">#00E676</color>
+    <color name="viiibe_error">#FF5252</color>
+</resources>

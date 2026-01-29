@@ -1,0 +1,289 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Minimal permissions - only what's needed for releases
+permissions:
+  contents: write
+  # Explicitly deny other permissions
+  actions: none
+  checks: none
+  deployments: none
+  issues: none
+  packages: none
+  pull-requests: none
+  repository-projects: none
+  security-events: none
+  statuses: none
+
+env:
+  APP_NAME: viiibe
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # Pin all actions to specific SHA for supply chain security
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+          persist-credentials: false  # Don't persist credentials for security
+
+      - name: Validate and extract version from tag
+        id: version
+        run: |
+          # Extract tag name safely
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+
+          # Validate tag format strictly: must be v followed by semver (vX.Y.Z or vX.Y.Z-suffix)
+          if ! [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "::error::Invalid tag format '$TAG_NAME'. Must match vX.Y.Z or vX.Y.Z-suffix (e.g., v1.0.0, v2.1.3-beta)"
+            exit 1
+          fi
+
+          # Extract version (remove leading 'v')
+          VERSION="${TAG_NAME#v}"
+
+          # Extract base version (without suffix like -alpha, -beta)
+          BASE_VERSION="${VERSION%%-*}"
+
+          # Parse version components safely
+          IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]}"
+          PATCH="${VERSION_PARTS[2]}"
+
+          # Validate numeric ranges to prevent overflow
+          # Android versionCode max is 2100000000 (2.1 billion)
+          # With formula MAJOR*1000000 + MINOR*1000 + PATCH:
+          # - MAJOR max: 2099 (2099*1000000 = 2,099,000,000)
+          # - MINOR max: 999
+          # - PATCH max: 999
+          if [[ "$MAJOR" -gt 2099 ]]; then
+            echo "::error::MAJOR version $MAJOR exceeds maximum (2099) for Android versionCode"
+            exit 1
+          fi
+          if [[ "$MINOR" -gt 999 ]]; then
+            echo "::error::MINOR version $MINOR exceeds maximum (999) for Android versionCode"
+            exit 1
+          fi
+          if [[ "$PATCH" -gt 999 ]]; then
+            echo "::error::PATCH version $PATCH exceeds maximum (999) for Android versionCode"
+            exit 1
+          fi
+
+          # Calculate version code with overflow check
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+
+          if [[ "$VERSION_CODE" -gt 2100000000 ]]; then
+            echo "::error::Calculated versionCode $VERSION_CODE exceeds Android maximum (2100000000)"
+            exit 1
+          fi
+
+          # Output validated values
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
+          echo "::notice::Version: $VERSION, Version Code: $VERSION_CODE"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.5.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Update version in build.gradle.kts
+        env:
+          # Pass values through environment variables to prevent shell injection
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          VERSION_NAME: ${{ steps.version.outputs.version }}
+        run: |
+          # Use environment variables instead of direct interpolation to prevent injection
+          sed -i "s/versionCode = [0-9]*/versionCode = ${VERSION_CODE}/" app/build.gradle.kts
+          sed -i "s/versionName = \"[^\"]*\"/versionName = \"${VERSION_NAME}\"/" app/build.gradle.kts
+
+      # ============================================================
+      # SIGNING CONFIGURATION
+      # ============================================================
+      # For production releases, uncomment this section and configure
+      # the following secrets in your GitHub repository settings:
+      #
+      # - KEYSTORE_BASE64: Base64-encoded keystore file
+      #   Generate with: base64 -i your-keystore.jks | tr -d '\n'
+      #
+      # - KEYSTORE_PASSWORD: Password for the keystore
+      # - KEY_ALIAS: Alias of the signing key
+      # - KEY_PASSWORD: Password for the signing key
+      #
+      # ============================================================
+      # - name: Decode Keystore
+      #   env:
+      #     KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      #   run: |
+      #     echo "$KEYSTORE_BASE64" | base64 --decode > app/release-keystore.jks
+      #
+      # - name: Build Release APK (Signed)
+      #   env:
+      #     KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      #   run: |
+      #     ./gradlew assembleRelease \
+      #       -Pandroid.injected.signing.store.file=$PWD/app/release-keystore.jks \
+      #       -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+      #       -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+      #       -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+      # ============================================================
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        id: rename
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          APP_NAME: ${{ env.APP_NAME }}
+        run: |
+          # Construct APK name safely using environment variables
+          APK_NAME="${APP_NAME}-v${VERSION}.apk"
+
+          # Find the built APK (debug for now, change to release when signing is configured)
+          # Use -maxdepth to prevent traversing unexpected directories
+          APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name "*.apk" -type f | head -1)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::APK not found in app/build/outputs/apk/debug/"
+            exit 1
+          fi
+
+          # Verify the found APK is a real file
+          if [ ! -f "$APK_PATH" ]; then
+            echo "::error::Found path is not a file: $APK_PATH"
+            exit 1
+          fi
+
+          # Copy and rename
+          cp "$APK_PATH" "$APK_NAME"
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_path=$APK_NAME" >> $GITHUB_OUTPUT
+
+      - name: Generate SHA256 hash
+        id: hash
+        env:
+          APK_PATH: ${{ steps.rename.outputs.apk_path }}
+        run: |
+          # Validate APK_PATH doesn't contain malicious characters
+          if [[ "$APK_PATH" =~ [^a-zA-Z0-9._-] ]]; then
+            echo "::error::APK path contains unexpected characters"
+            exit 1
+          fi
+
+          SHA256=$(sha256sum "$APK_PATH" | cut -d ' ' -f 1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "$SHA256  $APK_PATH" > "${APK_PATH}.sha256"
+          echo "::notice::SHA256: $SHA256"
+
+      - name: Get tag message for changelog
+        id: changelog
+        env:
+          TAG_REF: ${{ github.ref }}
+        run: |
+          # Extract tag name safely
+          TAG_NAME="${TAG_REF#refs/tags/}"
+
+          # Try to get annotated tag message
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "$TAG_NAME" 2>/dev/null || echo "")
+
+          if [ -z "$TAG_MESSAGE" ]; then
+            # Fall back to commit message
+            TAG_MESSAGE=$(git log -1 --pretty=%B)
+          fi
+
+          # Write to file to avoid escaping issues with multiline content
+          echo "$TAG_MESSAGE" > /tmp/changelog.txt
+
+          # Use delimiter for multiline output (safer than escaping)
+          {
+            echo 'message<<CHANGELOG_EOF'
+            cat /tmp/changelog.txt
+            echo 'CHANGELOG_EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release_notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.hash.outputs.sha256 }}
+          APK_NAME: ${{ steps.rename.outputs.apk_name }}
+          CHANGELOG: ${{ steps.changelog.outputs.message }}
+        run: |
+          # Use environment variables (not direct interpolation) for injection safety
+          # Note: Using unquoted heredoc delimiter to allow variable expansion
+          cat << RELEASE_NOTES_EOF > release_notes.md
+          ## Viiibe v${VERSION}
+
+          ### Changes
+          ${CHANGELOG}
+
+          ### Installation
+          1. Download \`${APK_NAME}\` from the assets below
+          2. Enable "Install from unknown sources" if prompted
+          3. Open the APK file to install
+
+          ### Verification
+          Verify the APK integrity using SHA256:
+          \`\`\`
+          ${SHA256}  ${APK_NAME}
+          \`\`\`
+
+          **Linux/macOS:**
+          \`\`\`bash
+          sha256sum ${APK_NAME}
+          # or
+          shasum -a 256 ${APK_NAME}
+          \`\`\`
+
+          **Windows (PowerShell):**
+          \`\`\`powershell
+          Get-FileHash ${APK_NAME} -Algorithm SHA256
+          \`\`\`
+
+          ---
+          *Built with GitHub Actions*
+          RELEASE_NOTES_EOF
+
+      - name: Create GitHub Release
+        # Pin to specific SHA for supply chain security
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+          files: |
+            ${{ steps.rename.outputs.apk_path }}
+            ${{ steps.rename.outputs.apk_path }}.sha256
+          generate_release_notes: false
+          # Make release creation idempotent - update if exists
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact
+        # Pin to specific SHA for supply chain security
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.0
+        with:
+          name: ${{ steps.rename.outputs.apk_name }}
+          path: ${{ steps.rename.outputs.apk_path }}
+          retention-days: 30
+          # Ensure artifact integrity
+          if-no-files-found: error
